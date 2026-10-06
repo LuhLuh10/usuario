@@ -56,7 +56,7 @@ $app->get('/usuarios/{id}', function ($request, $response, $args) use (&$usuario
     return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
 });
  
-//Filtro
+//Sem Filtro
 $app->get('/usuarios', function ($request, $response) use (&$usuarios) {
     $queryParams = $request->getQueryParams();
     $nome = $queryParams['nome'] ?? null;
@@ -95,6 +95,8 @@ $app->put('/usuarios/{id}', function ($request, $response, $args) use (&$usuario
     return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
 });
 
+
+//Put senha
 $app->put('/usuarios/{id}/senha', function ($request, $response, $args) use (&$usuarios) {
     $usuario = current(array_filter($usuarios, fn ($item) => $item['id'] === (int) $args['id'])) ?: null;
     if (!$usuario) {
