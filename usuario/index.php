@@ -1,122 +1,122 @@
 <?php
 require __DIR__ . '/../vendor/autoload.php';
-
 use Slim\Factory\AppFactory;
-
+use Psr\Http\Message\ResponseInterface as Response;
+use Psr\Http\Message\ServerRequestInterface as Request;
+ 
 $app = AppFactory::create();
+ 
 $app->addBodyParsingMiddleware();
 $app->addRoutingMiddleware();
 $app->addErrorMiddleware(true, true, true);
-
-$senhaInicial = password_hash('senha123', PASSWORD_DEFAULT);
+ 
 $usuarios = [
-    ['id' => 1, 'nome' => 'Ana Silva', 'email' => 'ana@example.com', 'login' => 'ana', 'senha' => $senhaInicial],
-    ['id' => 2, 'nome' => 'Bruno Souza', 'email' => 'bruno@example.com', 'login' => 'bruno', 'senha' => $senhaInicial],
-    ['id' => 3, 'nome' => 'Carla Lima', 'email' => 'carla@example.com', 'login' => 'carla', 'senha' => $senhaInicial],
-    ['id' => 4, 'nome' => 'Diego Costa', 'email' => 'diego@example.com', 'login' => 'diego', 'senha' => $senhaInicial],
-    ['id' => 5, 'nome' => 'Eva Martins', 'email' => 'eva@example.com', 'login' => 'eva', 'senha' => $senhaInicial],
+        ['id' => 1, 'nome' => 'Ana Silva',
+         'email' => 'ana@gmail.com',
+         'login' => 'ana',
+         'senha' => 'senha123'],
+
+        ['id' => 2, 'nome' => 'Bruno Souza',
+         'email' => 'bruno@gmail.com',
+         'login' => 'bruno',
+         'senha' => 'senha123'],
+
+        ['id' => 3, 'nome' => 'Carla Lima',
+         'email' => 'carla@gmail.com',
+         'login' => 'carla',
+         'senha' => 'senha123'],
+
+        ['id' => 4, 'nome' => 'Diego Costa',
+         'email' => 'diego@gmail.com',
+         'login' => 'diego',
+         'senha' => 'senha123'],
+
+        ['id' => 5, 'nome' => 'Eva Martins',
+         'email' => 'eva@gmail.com',
+         'login' => 'eva',
+         'senha' => 'senha123'],
 ];
-
-function respostaJson($response, $dados, $status = 200)
-{
-    $response->getBody()->write(json_encode($dados, JSON_UNESCAPED_UNICODE));
-    return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
-}
-
-function usuarioPublico($usuario)
-{
-    unset($usuario['senha']);
-    return $usuario;
-}
-
+ 
+// status
 $app->get('/status', function ($request, $response) {
-    return respostaJson($response, ['status' => 'ok']);
+    $response->getBody()->write(json_encode(['status' => 'ok']));
+    return $response
+        ->withHeader('Content-Type', 'application/json')
+        ->withStatus(200);
 });
-
-$app->get('/usuarios', function ($request, $response) use (&$usuarios) {
-    return respostaJson($response, array_map('usuarioPublico', $usuarios));
-});
-
+ 
+//GET
 $app->get('/usuarios/{id}', function ($request, $response, $args) use (&$usuarios) {
-    foreach ($usuarios as $usuario) {
-        if ($usuario['id'] === (int) $args['id']) {
-            return respostaJson($response, usuarioPublico($usuario));
-        }
+    $usuario = current(array_filter($usuarios, fn ($item) => $item['id'] === (int) $args['id'])) ?: null;
+    if (!$usuario) {
+        $response->getBody()->write(json_encode(['erro' => 'Usuário não encontrado']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
     }
-    return respostaJson($response, ['erro' => 'Usuário não encontrado'], 404);
+    $response->getBody()->write(json_encode($usuario));
+    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
 });
-
+ 
+//Filtro
+$app->get('/usuarios', function ($request, $response) use (&$usuarios) {
+    $queryParams = $request->getQueryParams();
+    $nome = $queryParams['nome'] ?? null;
+ 
+    if($nome) {
+        $usuariosFiltrados = array_filter($usuarios, fn($item) => str_contains(mb_strtolower($item['nome']), mb_strtolower($nome)));
+    } else {
+        $usuariosFiltrados = $usuarios;
+    }
+ 
+    $response->getBody()->write(json_encode(array_values($usuariosFiltrados)));
+    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+});
+ 
+//POST
 $app->post('/usuarios', function ($request, $response) use (&$usuarios) {
     $dados = $request->getParsedBody();
-    if (!is_array($dados) || empty($dados['nome']) || empty($dados['email']) || empty($dados['login']) || empty($dados['senha'])) {
-        return respostaJson($response, ['erro' => 'Informe nome, email, login e senha'], 400);
-    }
-
-    $novoUsuario = [
-        'id' => $usuarios ? max(array_column($usuarios, 'id')) + 1 : 1,
-        'nome' => $dados['nome'],
-        'email' => $dados['email'],
-        'login' => $dados['login'],
-        'senha' => password_hash($dados['senha'], PASSWORD_DEFAULT),
-    ];
+    $novoUsuario = ['id' => count($usuarios) + 1, 'nome' => $dados['nome'], 'email' => $dados['email'], 'login' => $dados['login'], 'senha' => $dados['senha']];
     $usuarios[] = $novoUsuario;
-    return respostaJson($response, usuarioPublico($novoUsuario), 201);
+    $response->getBody()->write(json_encode($novoUsuario));
+    return $response->withHeader('Content-Type', 'application/json')->withStatus(201);
 });
-
+ 
+//PUT
 $app->put('/usuarios/{id}', function ($request, $response, $args) use (&$usuarios) {
+    $usuario = current(array_filter($usuarios, fn ($item) => $item['id'] === (int) $args['id'])) ?: null;
+    if (!$usuario) {
+        $response->getBody()->write(json_encode(['erro' => 'Usuário não encontrado']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
+    }
     $dados = $request->getParsedBody();
-    foreach ($usuarios as $indice => $usuario) {
-        if ($usuario['id'] === (int) $args['id']) {
-            foreach (['nome', 'email', 'login'] as $campo) {
-                if (isset($dados[$campo])) {
-                    $usuarios[$indice][$campo] = $dados[$campo];
-                }
-            }
-            return respostaJson($response, usuarioPublico($usuarios[$indice]));
-        }
-    }
-    return respostaJson($response, ['erro' => 'Usuário não encontrado'], 404);
-});
-
-$app->delete('/usuarios/{id}', function ($request, $response, $args) use (&$usuarios) {
-    foreach ($usuarios as $indice => $usuario) {
-        if ($usuario['id'] === (int) $args['id']) {
-            unset($usuarios[$indice]);
-            $usuarios = array_values($usuarios);
-            return respostaJson($response, ['mensagem' => 'Usuário removido com sucesso']);
-        }
-    }
-    return respostaJson($response, ['erro' => 'Usuário não encontrado'], 404);
-});
-
-$app->post('/login', function ($request, $response) use (&$usuarios) {
-    $dados = $request->getParsedBody();
-    if (!is_array($dados) || empty($dados['login']) || empty($dados['senha'])) {
-        return respostaJson($response, ['erro' => 'Informe login e senha'], 400);
-    }
-    foreach ($usuarios as $usuario) {
-        if ($usuario['login'] === $dados['login'] && password_verify($dados['senha'], $usuario['senha'])) {
-            return respostaJson($response, ['mensagem' => 'Login realizado com sucesso']);
-        }
-    }
-    return respostaJson($response, ['erro' => 'Login ou senha inválidos'], 401);
+    $usuario['nome'] = $dados['nome'];
+    $usuario['email'] = $dados['email'];
+    $usuario['login'] = $dados['login'];
+    $response->getBody()->write(json_encode($usuario));
+    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
 });
 
 $app->put('/usuarios/{id}/senha', function ($request, $response, $args) use (&$usuarios) {
-    $dados = $request->getParsedBody();
-    foreach ($usuarios as $posicao => $usuario) {
-        if ($usuario['id'] === (int) $args['id']) {
-            if (empty($dados['senha_atual']) || empty($dados['nova_senha'])) {
-                return respostaJson($response, ['erro' => 'Informe senha_atual e nova_senha'], 400);
-            }
-            if (!password_verify($dados['senha_atual'], $usuario['senha'])) {
-                return respostaJson($response, ['erro' => 'Senha atual incorreta'], 401);
-            }
-            $usuarios[$posicao]['senha'] = password_hash($dados['nova_senha'], PASSWORD_DEFAULT);
-            return respostaJson($response, ['mensagem' => 'Senha alterada com sucesso']);
-        }
+    $usuario = current(array_filter($usuarios, fn ($item) => $item['id'] === (int) $args['id'])) ?: null;
+    if (!$usuario) {
+        $response->getBody()->write(json_encode(['erro' => 'Usuário não encontrado']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
     }
-    return respostaJson($response, ['erro' => 'Usuário não encontrado'], 404);
+    $dados = $request->getParsedBody();
+    $usuario['senha'] = $dados['senha'];
+    $response->getBody()->write(json_encode($usuario));
+    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
 });
-
+ 
+//DELETE
+$app->delete('/usuarios/{id}', function ($request, $response, $args) use (&$usuarios) {
+    $usuario = current(array_filter($usuarios, fn ($item) => $item['id'] === (int) $args['id'])) ?: null;
+    if (!$usuario) {
+        $response->getBody()->write(json_encode(['erro' => 'Usuário não encontrado']));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
+    }
+    $usuarios = array_filter($usuarios, fn ($item) => $item['id'] !== (int) $args['id']);
+    $response->getBody()->write(json_encode(['mensagem' => 'Usuário removido com sucesso']));
+    return $response->withHeader('Content-Type', 'application/json')->withStatus(200);
+});
+ 
 $app->run();
